@@ -1,3 +1,4 @@
+app-cdk
 *.swp
 package-lock.json
 __pycache__
