@@ -9,12 +9,13 @@ from app_cdk.secrets_cdk_stack import SecretsCdkStack
 
 
 app = cdk.App()
-AppCdkStack(app, "AppCdkStack",)
+app_stack = AppCdkStack(app, "AppCdkStack",)
 secrets = SecretsCdkStack(app, "secrets-stack")
 pipeline = PipelineCdkStack(
     app, 
     "pipeline-stack",
-    secrets= secrets.secret_data
-    )
+    secrets= secrets.secret_data,
+    lambda_alias=app_stack.alias_data
+)
 
 app.synth()

@@ -2,15 +2,24 @@ from constructs import Construct
 from aws_cdk import (
     Stack,
     aws_codebuild as codebuild,
+    aws_codedeploy as codedeploy,
     aws_codepipeline as codepipeline,
     aws_codepipeline_actions as codepipeline_actions,
     SecretValue,
+    aws_iam as iam,
 )
 
 
 class PipelineCdkStack(Stack):
 
-    def __init__(self, scope: Construct, id: str, secrets, **kwargs) -> None:
+    def __init__(
+            self,
+            scope: Construct,
+            id: str,
+            secrets,
+            lambda_alias,
+            **kwargs
+    ) -> None:
         super().__init__(scope, id, **kwargs)
 
         pipeline = codepipeline.Pipeline(
@@ -28,8 +37,16 @@ class PipelineCdkStack(Stack):
             ),
         )
 
+        function_deploy = codedeploy.LambdaDeploymentGroup(
+            self, "DeploymentGroup",
+            alias=lambda_alias,
+            deployment_config=codedeploy.LambdaDeploymentConfig.LINEAR_10_PERCENT_EVERY_10_MINUTES
+        )
+
+
         source_output = codepipeline.Artifact()
         unit_test_output = codepipeline.Artifact()
+        deploy_output = codepipeline.Artifact()
 
         source_action = codepipeline_actions.GitHubSourceAction(
             action_name="GitHub_Source",
@@ -55,7 +72,18 @@ class PipelineCdkStack(Stack):
         pipeline.add_stage(
             stage_name="Code-Quality-Testing",
             actions=[build_action]
-        )   
+        )
+
+        deploy_action = codepipeline_actions.CodeDeployServerDeployAction(
+            action_name="Deploy",
+            deployment_group=function_deploy,
+            input=unit_test_output,
+        )
+
+        pipeline.add_stage(
+            stage_name="Function-Deployment",
+            actions=[deploy_action]
+        )
 
 
 

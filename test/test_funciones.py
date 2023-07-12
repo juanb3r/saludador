@@ -1,7 +1,7 @@
 import pytest
 import json
 
-from funciones import saludador
+from functions import saludador
 
 
 def test_lambda_status_code(): 
