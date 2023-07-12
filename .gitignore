@@ -1,3 +1,5 @@
+app-cdk/*
+app-cdk
 .vscode
 *.swp
 package-lock.json
