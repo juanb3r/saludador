@@ -13,6 +13,6 @@ phases:
   build:
     commands:
       - echo run tests...
-      - python -m pytest
+      - python -m pytest test
 artifacts:
   files: '**/*'
