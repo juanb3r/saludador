@@ -97,8 +97,6 @@ class PipelineCdkStack(Stack):
             effect=iam.Effect.ALLOW
         )
 
-
-
         # add policy to the role
         function_deploy.role.add_to_policy(deploy_policy_bucket)
         function_deploy.role.add_to_policy(deploy_policy_lambda)

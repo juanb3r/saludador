@@ -32,10 +32,16 @@ class AppCdkStack(Stack):
         saludador.add_layers(saludador_layer)
         saludador_version = saludador.current_version
 
-        saludador_alias = _lambda.Alias(
-            self, 'SaludadorAlias',
+        saludador_alias_prod = _lambda.Alias(
+            self, 'SaludadorAliasProd',
             alias_name='prod',
+            version=saludador.current_version
+        )
+
+        saludador_alias_dev = _lambda.Alias(
+            self, 'SaludadorAliasDev',
+            alias_name='dev',
             version=saludador_version
         )
 
-        self.alias = saludador_alias
+        self.alias = saludador_alias_dev

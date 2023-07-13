@@ -15,4 +15,6 @@ phases:
       - echo run tests...
       - python -m pytest test
 artifacts:
-  files: '**/*'
+  files:
+    - AppSpec.yml
+    - '**/*'
