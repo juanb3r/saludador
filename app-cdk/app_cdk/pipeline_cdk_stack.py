@@ -1,6 +1,8 @@
 from constructs import Construct
 from aws_cdk import (
+    CfnOutput,
     Stack,
+    aws_s3 as s3,
     aws_codebuild as codebuild,
     aws_codedeploy as codedeploy,
     aws_codepipeline as codepipeline,
@@ -22,9 +24,16 @@ class PipelineCdkStack(Stack):
     ) -> None:
         super().__init__(scope, id, **kwargs)
 
+        pipeline_bucket = s3.Bucket(
+            self, "PipelineBucket",
+        )
+
+        print(f"pipeline_bucket: {pipeline_bucket.bucket_name}")
+
         pipeline = codepipeline.Pipeline(
             self, "CICD_Pipeline",
-            cross_account_keys=False
+            cross_account_keys=False,
+            artifact_bucket=pipeline_bucket,
         )
 
         code_quality_build = codebuild.PipelineProject(
@@ -40,13 +49,12 @@ class PipelineCdkStack(Stack):
         function_deploy = codedeploy.LambdaDeploymentGroup(
             self, "DeploymentGroup",
             alias=lambda_alias,
-            deployment_config=codedeploy.LambdaDeploymentConfig.LINEAR_10_PERCENT_EVERY_10_MINUTES
-        )
+            deployment_config=codedeploy.LambdaDeploymentConfig.LINEAR_10_PERCENT_EVERY_10_MINUTES,
 
+        )
 
         source_output = codepipeline.Artifact()
         unit_test_output = codepipeline.Artifact()
-        deploy_output = codepipeline.Artifact()
 
         source_action = codepipeline_actions.GitHubSourceAction(
             action_name="GitHub_Source",
@@ -56,7 +64,7 @@ class PipelineCdkStack(Stack):
             output=source_output,
             branch="master"
         )
-        
+
         pipeline.add_stage(
             stage_name="Source",
             actions=[source_action]
@@ -73,6 +81,23 @@ class PipelineCdkStack(Stack):
             stage_name="Code-Quality-Testing",
             actions=[build_action]
         )
+
+        stack = Stack.of(self)
+        string = stack.to_json_string(dict(value=unit_test_output.s3_location.bucket_name))
+        print((string))
+
+        artifact_bucket_name = pipeline_bucket.bucket_name
+        print(unit_test_output.url)
+
+        # create policy for read bucket
+        deploy_policy = iam.PolicyStatement(
+            actions=["s3:GetObject"],
+            resources=[f"arn:aws:s3:::{artifact_bucket_name}/*"],
+            effect=iam.Effect.ALLOW
+        )
+
+        # add policy to the role
+        function_deploy.role.add_to_policy(deploy_policy)
 
         deploy_action = codepipeline_actions.CodeDeployServerDeployAction(
             action_name="Deploy",

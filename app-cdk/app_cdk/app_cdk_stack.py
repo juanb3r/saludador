@@ -37,6 +37,5 @@ class AppCdkStack(Stack):
             alias_name='prod',
             version=saludador_version
         )
-        saludador_version = saludador_alias.version
 
         self.alias = saludador_alias
