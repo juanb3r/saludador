@@ -9,7 +9,7 @@ def test_lambda_status_code():
     assert res.get('statusCode') == 200
     expected = {
         "statusCode": 200,
-        "body": "Hola desde lambda!"
+        "body": "Hola desde lambda version 2!"
     }
     assert expected == res
 
