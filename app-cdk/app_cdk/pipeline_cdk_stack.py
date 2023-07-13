@@ -82,22 +82,26 @@ class PipelineCdkStack(Stack):
             actions=[build_action]
         )
 
-        stack = Stack.of(self)
-        string = stack.to_json_string(dict(value=unit_test_output.s3_location.bucket_name))
-        print((string))
-
         artifact_bucket_name = pipeline_bucket.bucket_name
-        print(unit_test_output.url)
 
         # create policy for read bucket
-        deploy_policy = iam.PolicyStatement(
+        deploy_policy_bucket = iam.PolicyStatement(
             actions=["s3:GetObject"],
             resources=[f"arn:aws:s3:::{artifact_bucket_name}/*"],
             effect=iam.Effect.ALLOW
         )
+        # create policy for deploy in lambda
+        deploy_policy_lambda = iam.PolicyStatement(
+            actions=["lambda:*"],
+            resources=["*"],
+            effect=iam.Effect.ALLOW
+        )
+
+
 
         # add policy to the role
-        function_deploy.role.add_to_policy(deploy_policy)
+        function_deploy.role.add_to_policy(deploy_policy_bucket)
+        function_deploy.role.add_to_policy(deploy_policy_lambda)
 
         deploy_action = codepipeline_actions.CodeDeployServerDeployAction(
             action_name="Deploy",
