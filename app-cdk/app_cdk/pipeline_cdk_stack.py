@@ -73,8 +73,8 @@ class PipelineCdkStack(Stack):
                         "commands": "npm install -g aws-cdk"
                     },
                     "build": {
-                        "commands": ["pip install -r requirements.txt", "cdk synth AppCdkStack"
-                        ]
+                        "commands": [
+                            "pip install -r requirements.txt", "cdk synth app-cdk/AppCdkStack"]
                     }
                 },
                 "artifacts": {
