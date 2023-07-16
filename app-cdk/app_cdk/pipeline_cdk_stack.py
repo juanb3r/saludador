@@ -48,7 +48,7 @@ class PipelineCdkStack(Stack):
             repo="saludador",
             oauth_token=SecretValue.secrets_manager(secrets.secret_name),
             output=cdk_source_output,
-            branch="master"
+            branch="dev"
         )
         lambda_source_action = codepipeline_actions.GitHubSourceAction(
             action_name="LambdaCode_GitHub_Source",
