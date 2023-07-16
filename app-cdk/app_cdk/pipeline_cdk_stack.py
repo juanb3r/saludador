@@ -128,11 +128,11 @@ class PipelineCdkStack(Stack):
             actions=[
                 codepipeline_actions.CloudFormationCreateUpdateStackAction(
                     action_name="Lambda_CFN_Deploy",
-                    template_path=cdk_build_output.at_path("./app-cdk/AppCdkStack.template.yaml"),
+                    template_path=cdk_build_output.at_path("app-cdk/AppCdkStack.template.yaml"),
                     stack_name="LambdaStackDeployedName",
                     admin_permissions=True,
                     parameter_overrides=lambda_code.assign(
-                        bucket_name=pipeline_bucket.bucket_name,
+                        bucket_name=lambda_build_output.bucket_name,
                         object_key=lambda_build_output.object_key
                         ),
                     extra_inputs=[lambda_build_output]
