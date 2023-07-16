@@ -24,17 +24,10 @@ class PipelineCdkStack(Stack):
             **kwargs
     ) -> None:
         super().__init__(scope, id, **kwargs)
-
-        pipeline_bucket = s3.Bucket(
-            self, "PipelineBucket",
-        )
-
-        print(f"pipeline_bucket: {pipeline_bucket.bucket_name}")
-
+        
         pipeline = codepipeline.Pipeline(
             self, "CICD_Pipeline",
             cross_account_keys=False,
-            artifact_bucket=pipeline_bucket,
         )
 
         cdk_source_output = codepipeline.Artifact()
