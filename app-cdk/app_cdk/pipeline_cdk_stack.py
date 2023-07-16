@@ -74,11 +74,14 @@ class PipelineCdkStack(Stack):
                     },
                     "build": {
                         "commands": [
-                            "pip install -r requirements.txt", "cdk synth app-cdk/AppCdkStack"]
+                            "pip install -r requirements.txt",
+                            "cd app-cdk && cdk synth AppCdkStack",
+                            "cd .."
+                        ]
                     }
                 },
                 "artifacts": {
-                    "files": "LambdaStack.template.yaml"
+                    "files": "AppCdkStack.template.yaml"
                 }
             })
         )
