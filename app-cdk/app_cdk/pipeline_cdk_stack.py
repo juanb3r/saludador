@@ -10,6 +10,7 @@ from aws_cdk import (
     SecretValue,
     aws_iam as iam,
 )
+from aws_cdk.aws_lambda import Code
 
 
 class PipelineCdkStack(Stack):
@@ -19,7 +20,7 @@ class PipelineCdkStack(Stack):
             scope: Construct,
             id: str,
             secrets,
-            lambda_alias,
+            lambda_code,
             **kwargs
     ) -> None:
         super().__init__(scope, id, **kwargs)
@@ -36,82 +37,101 @@ class PipelineCdkStack(Stack):
             artifact_bucket=pipeline_bucket,
         )
 
-        code_quality_build = codebuild.PipelineProject(
-            self, "Code Quality",
-            build_spec=codebuild.BuildSpec.from_source_filename("./buildspec_test.yml"),
-            environment=codebuild.BuildEnvironment(
-                build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_4,
-                privileged=True,
-                compute_type=codebuild.ComputeType.LARGE,
-            ),
-        )
-
-        function_deploy = codedeploy.LambdaDeploymentGroup(
-            self, "DeploymentGroup",
-            alias=lambda_alias,
-            deployment_config=codedeploy.LambdaDeploymentConfig.LINEAR_10_PERCENT_EVERY_10_MINUTES,
-
-        )
-
-        source_output = codepipeline.Artifact()
-        unit_test_output = codepipeline.Artifact()
-
-        source_action = codepipeline_actions.GitHubSourceAction(
-            action_name="GitHub_Source",
+        cdk_source_output = codepipeline.Artifact()
+        lambda_source_output = codepipeline.Artifact()
+        cdk_build_output = codepipeline.Artifact()
+        lambda_build_output = codepipeline.Artifact()
+        
+        cdk_source_action = codepipeline_actions.GitHubSourceAction(
+            action_name="CDK_GitHub_Source",
             owner="juanb3r",
             repo="saludador",
             oauth_token=SecretValue.secrets_manager(secrets.secret_name),
-            output=source_output,
+            output=cdk_source_output,
             branch="master"
         )
-
+        lambda_source_action = codepipeline_actions.GitHubSourceAction(
+            action_name="LambdaCode_GitHub_Source",
+            owner="juanb3r",
+            repo="saludador_lambda",
+            oauth_token=SecretValue.secrets_manager(secrets.secret_name),
+            output=lambda_source_output,
+            branch="master"
+        )
         pipeline.add_stage(
             stage_name="Source",
-            actions=[source_action]
+            actions=[cdk_source_action, lambda_source_action]
+        )   
+        cdk_build_project = codebuild.Project(self, "CdkBuildProject",
+            environment=codebuild.BuildEnvironment(
+                build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_4
+            ),
+            build_spec=codebuild.BuildSpec.from_object({
+                "version": "0.2",
+                "phases": {
+                    "install": {
+                        "commands": "npm install -g aws-cdk"
+                    },
+                    "build": {
+                        "commands": ["pip install -r requirements.txt", "cdk synth AppCdkStack"
+                        ]
+                    }
+                },
+                "artifacts": {
+                    "files": "LambdaStack.template.yaml"
+                }
+            })
         )
 
-        build_action = codepipeline_actions.CodeBuildAction(
-            action_name="Unit-Test",
-            project=code_quality_build,
-            input=source_output,  # The build action must use the CodeCommitSourceAction output as input.
-            outputs=[unit_test_output]
+        cdk_build_action = codepipeline_actions.CodeBuildAction(
+            action_name="CDK_Build",
+            project=cdk_build_project,
+            input=cdk_source_output,
+            outputs=[cdk_build_output]
         )
 
+        lambda_build_project = codebuild.Project(self, "LambdaBuildProject",
+            environment=codebuild.BuildEnvironment(
+                build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_4
+            ),
+            build_spec=codebuild.BuildSpec.from_object({
+                "version": "0.2",
+                "phases": {
+                    "install": {
+                        "commands": "pip install -r requirements.txt"
+                    },
+                    "build": {
+                        "commands": "pip install -r requirements.txt"
+                    }
+                },
+                "artifacts": {
+                    "files": ["saludador.py"]
+                }
+            })
+        )
+        lambda_build_action = codepipeline_actions.CodeBuildAction(
+            action_name="Lambda_Build",
+            project=lambda_build_project,
+            input=lambda_source_output,
+            outputs=[lambda_build_output]
+        )
         pipeline.add_stage(
-            stage_name="Code-Quality-Testing",
-            actions=[build_action]
+            stage_name="Build",
+            actions=[cdk_build_action, lambda_build_action]
         )
-
-        artifact_bucket_name = pipeline_bucket.bucket_name
-
-        # create policy for read bucket
-        deploy_policy_bucket = iam.PolicyStatement(
-            actions=["s3:GetObject"],
-            resources=[f"arn:aws:s3:::{artifact_bucket_name}/*"],
-            effect=iam.Effect.ALLOW
-        )
-        # create policy for deploy in lambda
-        deploy_policy_lambda = iam.PolicyStatement(
-            actions=["lambda:*"],
-            resources=["*"],
-            effect=iam.Effect.ALLOW
-        )
-
-        # add policy to the role
-        function_deploy.role.add_to_policy(deploy_policy_bucket)
-        function_deploy.role.add_to_policy(deploy_policy_lambda)
-
-        deploy_action = codepipeline_actions.CodeDeployServerDeployAction(
-            action_name="Deploy",
-            deployment_group=function_deploy,
-            input=unit_test_output,
-        )
-
         pipeline.add_stage(
-            stage_name="Function-Deployment",
-            actions=[deploy_action]
+            stage_name="Deploy",
+            actions=[
+                codepipeline_actions.CloudFormationCreateUpdateStackAction(
+                    action_name="Lambda_CFN_Deploy",
+                    template_path=cdk_build_output.at_path("LambdaStack.template.yaml"),
+                    stack_name="LambdaStackDeployedName",
+                    admin_permissions=True,
+                    parameter_overrides=lambda_code.assign(
+                        bucket_name=pipeline_bucket.bucket_name,
+                        object_key=lambda_build_output.object_key
+                        ),
+                    extra_inputs=[lambda_build_output]
+                )
+            ]
         )
-
-
-
-

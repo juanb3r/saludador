@@ -6,19 +6,26 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+
 class AppCdkStack(Stack):
 
     @property
     def alias_data(self):
         return self.alias
+    
+    @property
+    def lambda_code_data(self):
+        return self.lambda_code
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        lambda_code = _lambda.Code.from_cfn_parameters()
+
         saludador = _lambda.Function(
             self, 'SaludadorHandler',
             runtime=_lambda.Runtime.PYTHON_3_7,
-            code=_lambda.Code.from_asset('../functions'),
+            code=lambda_code,
             handler='saludador.handler',
         )
 
@@ -32,12 +39,6 @@ class AppCdkStack(Stack):
         saludador.add_layers(saludador_layer)
         saludador_version = saludador.current_version
 
-        saludador_alias_prod = _lambda.Alias(
-            self, 'SaludadorAliasProd',
-            alias_name='prod',
-            version=saludador.current_version
-        )
-
         saludador_alias_dev = _lambda.Alias(
             self, 'SaludadorAliasDev',
             alias_name='dev',
@@ -45,3 +46,4 @@ class AppCdkStack(Stack):
         )
 
         self.alias = saludador_alias_dev
+        self.lambda_code = lambda_code
