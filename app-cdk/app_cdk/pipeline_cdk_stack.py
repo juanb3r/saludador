@@ -82,7 +82,7 @@ class PipelineCdkStack(Stack):
                     }
                 },
                 "artifacts": {
-                    "files": "./AppCdkStack.template.yaml"
+                    "files": "./app-cdk/AppCdkStack.template.yaml"
                 }
             })
         )
