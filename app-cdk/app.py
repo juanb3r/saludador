@@ -16,6 +16,7 @@ pipeline = PipelineCdkStack(
     "pipeline-stack",
     secrets= secrets.secret_data,
     lambda_code=app_stack.lambda_code_data,
+    lambda_layer=app_stack.lambda_layer_data
 )
 
 app.synth()

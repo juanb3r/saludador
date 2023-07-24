@@ -1,14 +1,10 @@
 from constructs import Construct
 from aws_cdk import (
-    CfnOutput,
     Stack,
-    aws_s3 as s3,
     aws_codebuild as codebuild,
-    aws_codedeploy as codedeploy,
     aws_codepipeline as codepipeline,
     aws_codepipeline_actions as codepipeline_actions,
     SecretValue,
-    aws_iam as iam,
 )
 from aws_cdk.aws_lambda import Code
 
@@ -21,10 +17,11 @@ class PipelineCdkStack(Stack):
             id: str,
             secrets,
             lambda_code,
+            lambda_layer,
             **kwargs
     ) -> None:
         super().__init__(scope, id, **kwargs)
-        
+
         pipeline = codepipeline.Pipeline(
             self, "CICD_Pipeline",
             cross_account_keys=False,
@@ -34,6 +31,7 @@ class PipelineCdkStack(Stack):
         lambda_source_output = codepipeline.Artifact()
         cdk_build_output = codepipeline.Artifact()
         lambda_build_output = codepipeline.Artifact()
+        lambda_layer_build_output = codepipeline.Artifact()
         
         cdk_source_action = codepipeline_actions.GitHubSourceAction(
             action_name="CDK_GitHub_Source",
@@ -112,9 +110,62 @@ class PipelineCdkStack(Stack):
             input=lambda_source_output,
             outputs=[lambda_build_output]
         )
+        lambda_layer_build_project = codebuild.Project(self, "LambdaLayerBuildProject",
+            environment=codebuild.BuildEnvironment(
+                build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_4
+            ),
+            environment_variables={
+                "PYTHON_VERSION": codebuild.BuildEnvironmentVariable(
+                    type=codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value="3.7"
+                ),
+                "FILENAME": codebuild.BuildEnvironmentVariable(
+                    type=codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+                    value="LambdaLayer.zip"
+                ),
+            },
+            build_spec=codebuild.BuildSpec.from_object({
+                "version": "0.2",
+                "phases": {
+                    "install": {
+                        "commands": [
+                            "echo \"Actualizando pip\"",
+                            "pip install --upgrade pip",
+                            "echo \"Instalando librerías\"",
+                            "pip install -r requirements.txt",
+                        ]
+                    },
+                    "build": {
+                        "commands": [
+                            "echo \"building layer deployable\"",
+                            "mkdir -p build/python",
+                            "piphome=/usr/local/lib/python$PYTHON_VERSION/site-packages",
+                            "cd build && cp -r $piphome/ python/ && cd ..",
+                        ]
+                    },
+                },
+                "artifacts": {
+                    "files": [
+                        "**/*"
+                    ],
+                    "base-directory": "build",
+                    "name": "$FILENAME"
+                }
+            })
+        )
+        lambda_layer_build_action = codepipeline_actions.CodeBuildAction(
+            action_name="Lambda_Layer_Build",
+            project=lambda_layer_build_project,
+            input=lambda_source_output,
+            outputs=[lambda_layer_build_output]
+        )
         pipeline.add_stage(
             stage_name="Build",
-            actions=[cdk_build_action, lambda_build_action]
+            actions=[
+                cdk_build_action,
+                lambda_build_action,
+                lambda_layer_build_action
+            ]
         )
         pipeline.add_stage(
             stage_name="Deploy",
@@ -124,11 +175,19 @@ class PipelineCdkStack(Stack):
                     template_path=cdk_build_output.at_path("app-cdk/AppCdkStack.template.yaml"),
                     stack_name="LambdaStackDeployedName",
                     admin_permissions=True,
-                    parameter_overrides=lambda_code.assign(
-                        bucket_name=lambda_build_output.bucket_name,
-                        object_key=lambda_build_output.object_key
+                    parameter_overrides={
+                        "code": lambda_code.assign(
+                            bucket_name=lambda_build_output.bucket_name,
+                            object_key=lambda_build_output.object_key
                         ),
-                    extra_inputs=[lambda_build_output]
+                        "layer": lambda_layer.assign(
+                            bucket_name=lambda_layer_build_output.bucket_name,
+                            object_key=lambda_layer_build_output.object_key
+                        )
+                    },
+                    extra_inputs=[
+                        lambda_build_output,
+                        lambda_layer_build_output]
                 )
             ]
         )
