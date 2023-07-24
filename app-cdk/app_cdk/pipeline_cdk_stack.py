@@ -115,10 +115,6 @@ class PipelineCdkStack(Stack):
                 build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_4
             ),
             environment_variables={
-                "PYTHON_VERSION": codebuild.BuildEnvironmentVariable(
-                    type=codebuild.BuildEnvironmentVariableType.PLAINTEXT,
-                    value="3.7"
-                ),
                 "FILENAME": codebuild.BuildEnvironmentVariable(
                     type=codebuild.BuildEnvironmentVariableType.PLAINTEXT,
                     value="LambdaLayer.zip"
@@ -129,6 +125,9 @@ class PipelineCdkStack(Stack):
                 "phases": {
                     "install": {
                         "commands": [
+                            "echo \"Creando entorno y activandolo\"",
+                            "python3 -m venv venv",
+                            ". venv/bin/activate",
                             "echo \"Actualizando pip\"",
                             "pip install --upgrade pip",
                             "echo \"Instalando librerías\"",
@@ -137,10 +136,12 @@ class PipelineCdkStack(Stack):
                     },
                     "build": {
                         "commands": [
+                            "export PYTHON_VERSION=$(python3 --version | egrep -o \"([0-9]{1,}\.)+[0-9]{1,}\" | cut -c1-3)",
+                            "echo \"Version de python $PYTHON_VERSION\"",
                             "echo \"building layer deployable\"",
                             "mkdir -p build/python",
-                            "piphome=/usr/local/lib/python$PYTHON_VERSION/site-packages",
-                            "cd build && cp -r $piphome/ python/ && cd ..",
+                            "piphome=../venv/lib/python$PYTHON_VERSION/site-packages",
+                            "cd build && cp -r $piphome python && cd ..",
                         ]
                     },
                 },
@@ -175,19 +176,13 @@ class PipelineCdkStack(Stack):
                     template_path=cdk_build_output.at_path("app-cdk/AppCdkStack.template.yaml"),
                     stack_name="LambdaStackDeployedName",
                     admin_permissions=True,
-                    parameter_overrides={
-                        "code": lambda_code.assign(
+                    parameter_overrides=lambda_code.assign(
                             bucket_name=lambda_build_output.bucket_name,
                             object_key=lambda_build_output.object_key
                         ),
-                        "layer": lambda_layer.assign(
-                            bucket_name=lambda_layer_build_output.bucket_name,
-                            object_key=lambda_layer_build_output.object_key
-                        )
-                    },
                     extra_inputs=[
-                        lambda_build_output,
-                        lambda_layer_build_output]
-                )
+                        lambda_build_output
+                    ]
+                ),
             ]
         )
