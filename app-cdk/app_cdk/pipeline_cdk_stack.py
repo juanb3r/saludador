@@ -6,7 +6,6 @@ from aws_cdk import (
     aws_codepipeline_actions as codepipeline_actions,
     SecretValue,
 )
-from aws_cdk.aws_lambda import Code
 
 
 class PipelineCdkStack(Stack):
@@ -17,7 +16,7 @@ class PipelineCdkStack(Stack):
             id: str,
             secrets,
             lambda_code,
-            lambda_layer,
+            lambda_layer_code,
             **kwargs
     ) -> None:
         super().__init__(scope, id, **kwargs)
@@ -140,7 +139,7 @@ class PipelineCdkStack(Stack):
                             "echo \"Version de python $PYTHON_VERSION\"",
                             "echo \"building layer deployable\"",
                             "mkdir -p build/python",
-                            "piphome=../venv/lib/python$PYTHON_VERSION/site-packages",
+                            "piphome=../venv/lib/python$PYTHON_VERSION/site-packages/",
                             "cd build && cp -r $piphome python && cd ..",
                         ]
                     },
@@ -176,12 +175,19 @@ class PipelineCdkStack(Stack):
                     template_path=cdk_build_output.at_path("app-cdk/AppCdkStack.template.yaml"),
                     stack_name="LambdaStackDeployedName",
                     admin_permissions=True,
-                    parameter_overrides=lambda_code.assign(
+                    parameter_overrides={
+                        **lambda_code.assign(
                             bucket_name=lambda_build_output.bucket_name,
                             object_key=lambda_build_output.object_key
                         ),
+                        **lambda_layer_code.assign(
+                            bucket_name=lambda_layer_build_output.bucket_name,
+                            object_key=lambda_layer_build_output.object_key
+                        )
+                    },
                     extra_inputs=[
-                        lambda_build_output
+                        lambda_build_output,
+                        lambda_layer_build_output
                     ]
                 ),
             ]
